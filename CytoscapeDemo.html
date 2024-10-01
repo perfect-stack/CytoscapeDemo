@@ -1,0 +1,254 @@
+<html>
+<head>
+    <title>Cytoscape Demo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js" integrity="sha512-EY3U1MWdgKx0P1dqTE4inlKz2cpXtWpsR1YUyD855Hs6RL/A0cyvrKh60EpE8wDZ814cTe1KgRK+sG0Rn792vQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        #cy {
+            width: 1000px;
+            height: 800px;
+            display: block;
+            background: aliceblue;
+        }
+    </style>
+</head>
+<body>
+    <h1>Squares and Circles</h1>
+    <p>Would you like to play a game...</p>
+    <div id="cy"></div>
+    <script>
+        const CELL_SIZE = 100;
+        const CELL_CENTER = CELL_SIZE / 2;
+        const GRID_SIZE = CELL_SIZE * 3
+        const MESSAGE_LOCATION = {x: GRID_SIZE / 2, y: GRID_SIZE / 2};
+        const NEW_GAME_BUTTON_LOCATION = {x: GRID_SIZE / 2, y: GRID_SIZE + 5};
+
+        let board = [
+            [null, null, null],
+            [null, null, null],
+            [null, null, null]
+        ];
+
+        const startNewGame = () => {
+            board = [
+                [null, null, null],
+                [null, null, null],
+                [null, null, null]
+            ];
+            cy.elements().remove();
+            cy.add([...lineElements]);
+        };
+
+        const addLine = (lineElements, name, x1, y1, x2, y2) => {
+            const lineStart = `line${name}.start`;
+            const lineEnd = `line${name}.end`;
+            const lineEdge = `edge${name}`;
+            lineElements.push({
+                group: 'nodes',
+                data: {id: lineStart},
+                position: {x: x1, y: y1},
+                classes: ['line-node']
+            });
+
+            lineElements.push({
+                group: 'nodes',
+                data: {id: lineEnd},
+                position: {x: x2, y: y2},
+                classes: ['line-node']
+            });
+
+            lineElements.push({
+                group: 'edges',
+                data: {id: lineEdge, source: lineStart, target: lineEnd}
+            });
+        };
+
+        const lineElements = [];
+        for (var lineNum = 1; lineNum < 3; lineNum++) {
+            addLine(lineElements, `X${lineNum}`, lineNum * CELL_SIZE, 0, lineNum * CELL_SIZE, GRID_SIZE);
+            addLine(lineElements, `Y${lineNum}`, 0, lineNum * CELL_SIZE, GRID_SIZE, lineNum * CELL_SIZE);
+        }
+
+        const cy = cytoscape({
+            container: document.getElementById('cy'), // container to render in
+            elements: [...lineElements],
+            style: [ // the stylesheet for the graph
+                {
+                    selector: '.line-node',
+                    style: {
+                        'background-color': '#F11',
+                        'visibility': 'hidden',
+                        //'label': 'data(id)'
+                    }
+                },
+                {
+                    selector: '.token-node-rectangle',
+                    style: {
+                        'background-color': '#11F',
+                        'shape': 'rectangle',
+                    }
+                },
+                {
+                    selector: '.token-node-circle',
+                    style: {
+                        'background-color': '#1F1',
+                        'shape': 'ellipse',
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 3,
+                        'line-color': '#ccc',
+                        'curve-style': 'bezier'
+                    }
+                },
+                {
+                    selector: '.message-label',
+                    style: {
+                        'background-opacity': 0,
+                        'label': 'data(message)',
+                        'color': '#111',
+                        'font-size': '24px',
+                    }
+                },
+                {
+                    selector: '.new-game-button',
+                    style: {
+                        'width': '100px',
+                        'label': 'New Game',
+                        'color': '#111',
+                        'font-size': '14px',
+                        'text-valign': 'center',
+                        'shape': 'round-rectangle',
+                    }
+                }
+            ],
+            layout: {
+                name: 'preset',
+            },
+            wheelSensitivity: 0.1
+        });
+
+        cy.on('tap', function (event) {
+            // Check if the target is the background (not a node or edge)
+            if (event.target === cy) {
+                const position = event.position;
+                const x = position.x;
+                const y = position.y;
+                const gridX = Math.floor(x / CELL_SIZE);
+                const gridY = Math.floor(y / CELL_SIZE);
+                if (checkAddToken(gridX, gridY)) {
+                    addToken(gridX, gridY, 'X');
+                    if (checkThreeInARow(board) === 'X') {
+                        addMessage('You win!');
+                        addNewGameButton();
+                        return;
+                    }
+
+                    const emptyCellList = findEmptyCellList();
+                    if (emptyCellList.length > 1) {
+                        shuffleArray(emptyCellList);
+                    }
+
+                    if (emptyCellList.length > 0) {
+                        const {x, y} = emptyCellList[0];
+                        addToken(x, y, 'O');
+                    }
+
+                    if (checkThreeInARow(board) === 'O') {
+                        addMessage('You lose!');
+                        addNewGameButton();
+                        return;
+                    }
+                }
+            }
+        });
+
+        const checkAddToken = (x, y) => {
+            return board[y][x] === null;
+        }
+
+        const addToken = (x, y, token) => {
+            const tokenElement = {
+                group: 'nodes',
+                data: {id: `token${x}${y}`, token},
+                classes: [token === 'X' ? 'token-node-rectangle' : 'token-node-circle'],
+                position: {x: x * CELL_SIZE + CELL_CENTER, y: y * CELL_SIZE + CELL_CENTER},
+            };
+            cy.add(tokenElement);
+            board[y][x] = token;
+        };
+
+        const addMessage = (message) => {
+            cy.add({
+                group: 'nodes',
+                data: {id: 'message', message},
+                classes: ['message-label'],
+                position: {x: MESSAGE_LOCATION.x, y: MESSAGE_LOCATION.y},
+            });
+        };
+
+        const addNewGameButton = () => {
+            cy.add({
+                group: 'nodes',
+                data: {id: 'newGameButton'},
+                classes: ['new-game-button'],
+                position: {x: NEW_GAME_BUTTON_LOCATION.x, y: NEW_GAME_BUTTON_LOCATION.y},
+            });
+
+            cy.on('tap', 'node#newGameButton', function (event) {
+                startNewGame();
+            });
+        };
+
+        const findEmptyCellList = () => {
+            const emptyCellList = [];
+            for (var y = 0; y < 3; y++) {
+                for (var x = 0; x < 3; x++) {
+                    if (board[y][x] === null) {
+                        emptyCellList.push({x, y});
+                    }
+                }
+            }
+            return emptyCellList;
+        };
+
+        const shuffleArray = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        const checkThreeInARow = (board) => {
+            const checkLine = (a, b, c) => a !== null && a === b && b === c;
+
+            // Check rows
+            for (let row = 0; row < 3; row++) {
+                if (checkLine(board[row][0], board[row][1], board[row][2])) {
+                    return board[row][0];
+                }
+            }
+
+            // Check columns
+            for (let col = 0; col < 3; col++) {
+                if (checkLine(board[0][col], board[1][col], board[2][col])) {
+                    return board[0][col];
+                }
+            }
+
+            // Check diagonals
+            if (checkLine(board[0][0], board[1][1], board[2][2])) {
+                return board[0][0];
+            }
+            if (checkLine(board[0][2], board[1][1], board[2][0])) {
+                return board[0][2];
+            }
+
+            // No winner
+            return null;
+        };
+    </script>
+</body>
+</html>
